@@ -29,7 +29,7 @@ def NumericalColumns(df):  # fillna numeric feature
     df['totals.newVisits'].fillna(0, inplace=True)  # filling NA's with 0
 
     df['totals.bounces'].fillna(0, inplace=True)  # filling NA's with 0
-    df["totals.transactionRevenue"] = df["totals.transactionRevenue"].fillna(0.01).astype(float)  # filling NA with zero
+    df["totals.transactionRevenue"] = df["totals.transactionRevenue"].fillna(0).astype(float)  # filling NA with zero
     df['totals.pageviews'] = df['totals.pageviews'].astype(int)  # setting numerical column as integer
     df['totals.newVisits'] = df['totals.newVisits'].astype(int)  # setting numerical column as integer
     df["totals.hits"] = df["totals.hits"].astype(float)  # setting numerical to float
@@ -73,7 +73,15 @@ def main():
                 'geoNetwork.continent', 'geoNetwork.country', 'geoNetwork.region', 'trafficSource.isTrueDirect',
                 'trafficSource.keyword', 'trafficSource.medium', 'trafficSource.source',
                 'geoNetwork.subContinent', '_weekday', '_day', '_month', '_year', '_visitHour']
+
+    # cat_vars = ['device.isMobile',
+    #             'geoNetwork.city',
+    #             'geoNetwork.continent', 'geoNetwork.country', 'trafficSource.isTrueDirect',
+    #             'trafficSource.source',
+    #              '_weekday', '_day', '_month','_visitHour']
+
     contin_vars = ['totals.hits', 'totals.newVisits', 'totals.pageviews','visitNumber']
+    # contin_vars = ['totals.hits', 'totals.pageviews', 'visitNumber']
     dep = 'totals.transactionRevenue'
     train_ratio = 0.75
     csv_fn = f'{PATH}/tmp/subv2.csv'
@@ -136,32 +144,72 @@ def main():
     max_log_y = np.max(yl)
     y_range = (0, max_log_y * 1.2)
 
-    logger.info('Get Model')
-    md = ColumnarModelData.from_data_frame(PATH, val_idx, df, yl.astype(np.float32), cat_flds=cat_vars, bs=128,
-                                           test_df=df_test1)
+    # logger.info('Get Model')
+    # md = ColumnarModelData.from_data_frame(PATH, val_idx, df, yl.astype(np.float32), cat_flds=cat_vars, bs=128,
+    #                                        test_df=df_test1)
+    #
+    # logger.info('Categorize size')
+    # cat_sz = [(c, len(df_samp[c].cat.categories) + 1) for c in cat_vars]
+    #
+    # logger.info('Embedding size')
+    # emb_szs = [(c, min(50, (c + 1) // 2)) for _, c in cat_sz]
+    #
+    # m = md.get_learner(emb_szs, len(df.columns) - len(cat_vars),
+    #                    0.04, 1, [1000, 500], [0.001, 0.01], y_range=y_range)
+    # lr = 1e-3
+    #
+    # # m.fit(lr, 5, metrics=[exp_rmspe], cycle_len=1)
+    # m.fit(lr, 3, metrics=[exp_rmspe])
+    # # prediction
+    #
+    # x, y = m.predict_with_targs()
+    #
+    # logger.info('RMSE' + str(exp_rmspe(x, y)))
+    #
+    # pred_test = m.predict(True)
+    # pred_test = np.exp(pred_test)
+    #
+    # df_test[dep] = pred_test - 1
+    # df_test[['fullVisitorId', dep]].to_csv(csv_fn, index=False)
+    # df_try_unique = pd.read_csv(csv_fn, low_memory=False)
+    # df_try_unique = df_try_unique.groupby('fullVisitorId').mean()
+    # df_try_unique = df_try_unique.reset_index()
+    # df_try_unique[['fullVisitorId', 'totals.transactionRevenue']].to_csv(csv_submission, index=False)
 
-    logger.info('Categorize size')
-    cat_sz = [(c, len(df_samp[c].cat.categories) + 1) for c in cat_vars]
+   #Random forest regressor
+    # from sklearn.ensemble import RandomForestRegressor
+    # ((val, trn), (y_val, y_trn)) = split_by_idx(val_idx, df.values, yl)
+    # m = RandomForestRegressor(n_estimators=40, max_features=0.99, min_samples_leaf=2,
+    #                           n_jobs=-1, oob_score=True)
+    # m.fit(trn, y_trn);
+    # preds = m.predict(val)
+    # logger.info(m.score(trn, y_trn), m.score(val, y_val), m.oob_score_, exp_rmspe(preds, y_val))
 
-    logger.info('Embedding size')
-    emb_szs = [(c, min(50, (c + 1) // 2)) for _, c in cat_sz]
 
-    m = md.get_learner(emb_szs, len(df.columns) - len(cat_vars),
-                       0.04, 1, [1000, 500], [0.001, 0.01], y_range=y_range)
-    lr = 1e-5
+    # LGBM
+    import lightgbm as lgb
+    ((val, trn), (y_val, y_trn)) = split_by_idx(val_idx, df.values, yl)
+    lgb_train = lgb.Dataset(trn, y_trn)
+    lgb_val = lgb.Dataset(val, y_val)
+    params = {
+        'objective': 'binary',
+        'boosting': 'gbdt',
+        'learning_rate': 0.2,
+        'verbose': 0,
+        'num_leaves': 100,
+        'bagging_fraction': 0.95,
+        'bagging_freq': 1,
+        'bagging_seed': 1,
+        'feature_fraction': 0.9,
+        'feature_fraction_seed': 1,
+        'max_bin': 256,
+        'num_rounds': 100,
+        'metric': 'auc'
+    }
 
-    # m.fit(lr, 5, metrics=[exp_rmspe], cycle_len=1)
-    m.fit(lr, 3, metrics=[exp_rmspe])
-    # prediction
-
-    x, y = m.predict_with_targs()
-
-    logger.info('RMSE' + str(exp_rmspe(x, y)))
-
-    pred_test = m.predict(True)
-    pred_test = np.exp(pred_test)
-
-    df_test[dep] = pred_test - 1
+    lgbm_model = lgb.train(params, train_set=lgb_train, valid_sets=lgb_val, verbose_eval=5)
+    predictions = lgbm_model.predict(df_test1)
+    df_test[dep] =predictions
     df_test[['fullVisitorId', dep]].to_csv(csv_fn, index=False)
     df_try_unique = pd.read_csv(csv_fn, low_memory=False)
     df_try_unique = df_try_unique.groupby('fullVisitorId').mean()
