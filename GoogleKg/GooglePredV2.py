@@ -192,7 +192,8 @@ def main():
     lgb_train = lgb.Dataset(trn, y_trn)
     lgb_val = lgb.Dataset(val, y_val)
     params = {
-        'objective': 'binary',
+        #'objective': 'binary',
+        'objective': 'regression',
         'boosting': 'gbdt',
         'learning_rate': 0.2,
         'verbose': 0,
@@ -205,6 +206,9 @@ def main():
         'max_bin': 256,
         'num_rounds': 100,
         'metric': 'auc'
+        'num_iterations': 100,
+        'num_threads':0,
+        'device_type':'cpu' #gpu
     }
 
     lgbm_model = lgb.train(params, train_set=lgb_train, valid_sets=lgb_val, verbose_eval=5)
@@ -247,3 +251,5 @@ if __name__ == '__main__':
     except Exception as err:
         logger.exception('Exception occured')
         raise
+
+#https://github.com/Microsoft/LightGBM/blob/master/docs/Parameters.rst
