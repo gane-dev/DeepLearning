@@ -162,22 +162,22 @@ def main():
     lr = 1e-3
 
     # m.fit(lr, 5, metrics=[exp_rmspe], cycle_len=1)
-    m.fit(lr, 3, metrics=[exp_rmspe])
+    # m.fit(lr, 3, metrics=[exp_rmspe])
     # # prediction
     #
-    x, y = m.predict_with_targs()
-
-    logger.info('RMSE' + str(exp_rmspe(x, y)))
-
-    pred_test = m.predict(True)
-    pred_test = np.exp(pred_test)
-
-    df_test[dep] = pred_test
-    df_test[['fullVisitorId', dep]].to_csv(csv_fn, index=False)
-    df_try_unique = pd.read_csv(csv_fn, low_memory=False)
-    df_try_unique = df_try_unique.groupby('fullVisitorId').mean()
-    df_try_unique = df_try_unique.reset_index()
-    df_try_unique[['fullVisitorId', 'totals.transactionRevenue']].to_csv(csv_submission, index=False)
+    # x, y = m.predict_with_targs()
+    #
+    # logger.info('RMSE' + str(exp_rmspe(x, y)))
+    #
+    # pred_test = m.predict(True)
+    # pred_test = np.exp(pred_test)
+    #
+    # df_test[dep] = pred_test
+    # df_test[['fullVisitorId', dep]].to_csv(csv_fn, index=False)
+    # df_try_unique = pd.read_csv(csv_fn, low_memory=False)
+    # df_try_unique = df_try_unique.groupby('fullVisitorId').mean()
+    # df_try_unique = df_try_unique.reset_index()
+    # df_try_unique[['fullVisitorId', 'totals.transactionRevenue']].to_csv(csv_submission, index=False)
 
    #Random forest regressor
     # from sklearn.ensemble import RandomForestRegressor
@@ -190,6 +190,7 @@ def main():
 
 
     # LGBM
+
     # import lightgbm as lgb
     # ((val, trn), (y_val, y_trn)) = split_by_idx(val_idx, df.values, yl)
     # lgb_train = lgb.Dataset(trn, y_trn)
@@ -221,6 +222,40 @@ def main():
     # df_try_unique = df_try_unique.reset_index()
     # df_try_unique[['fullVisitorId', 'totals.transactionRevenue']].to_csv(csv_submission, index=False)
     # logger.info('Train done')
+    import lightgbm as lgb
+    ((val, trn), (y_val, y_trn)) = split_by_idx(val_idx, df.values, yl)
+    lgb_train = lgb.Dataset(trn, y_trn)
+    lgb_val = lgb.Dataset(val, y_val)
+    params = {
+        #'objective': 'binary',
+        'objective': 'regression',
+        'boosting': 'gbdt',
+        'learning_rate': 0.2,
+        'verbose': 0,
+        'num_leaves': 100,
+        'bagging_fraction': 0.95,
+        'bagging_freq': 1,
+        'bagging_seed': 1,
+        'feature_fraction': 0.9,
+        'feature_fraction_seed': 1,
+        'max_bin': 256,
+        'num_rounds': 100,
+        'metric': 'l2_root',
+        'num_iterations': 100,
+        'num_threads':0,
+        'device_type':'cpu' #gpu
+    }
+
+    lgbm_model = lgb.train(params, train_set=lgb_train, valid_sets=lgb_val, verbose_eval=5)
+    predictions = lgbm_model.predict(df_test1)
+    df_test[dep] =predictions-1
+    df_test[['fullVisitorId', dep]].to_csv(csv_fn, index=False)
+    df_try_unique = pd.read_csv(csv_fn, low_memory=False)
+    df_try_unique = df_try_unique.groupby('fullVisitorId').mean()
+    df_try_unique = df_try_unique.reset_index()
+    df_try_unique[['fullVisitorId', 'totals.transactionRevenue']].to_csv(csv_submission, index=False)
+    logger.info('Train done')
+
 
 
 def get_logger():
@@ -252,3 +287,5 @@ if __name__ == '__main__':
     except Exception as err:
         logger.exception('Exception occured')
         raise
+
+#https://github.com/Microsoft/LightGBM/blob/master/docs/Parameters.rst
